@@ -22,3 +22,16 @@ or you can run it directly from the command line like this:
     sudo python ADXL345.py
     
 which will output the current x, y, and z axis readings in Gs.
+
+If you wish to exercise the ADXL345's interrupt functionality to alert the Pi when it detects motion, connect a wire between the 'INT1' pin on the ADXL345 and the GPIO-7 pin on the Raspberry Pi. Then, refer to example-interrupt.py:
+
+    from adxl345 import ADXL345
+    from time import sleep
+
+    adxl345 = ADXL345(interrupt = True)
+
+    try:
+      while True:
+        sleep(10)
+    except KeyboardInterrupt:
+      adxl345.cleanup()

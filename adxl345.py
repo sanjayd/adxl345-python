@@ -7,12 +7,16 @@
 # the Adafruit Triple Axis ADXL345 breakout board:
 # http://shop.pimoroni.com/products/adafruit-triple-axis-accelerometer
 
+import RPi.GPIO as GPIO
 import smbus
 from time import sleep
 
 # select the correct i2c bus for this revision of Raspberry Pi
 revision = ([l[12:-1] for l in open('/proc/cpuinfo','r').readlines() if l[:8]=="Revision"]+['0000'])[0]
 bus = smbus.SMBus(1 if int(revision, 16) >= 4 else 0)
+
+# GPIO interrupt pin
+GPIO_INTERRUPT_PIN  = 7
 
 # ADXL345 constants
 EARTH_GRAVITY_MS2   = 9.80665
@@ -21,6 +25,12 @@ SCALE_MULTIPLIER    = 0.004
 DATA_FORMAT         = 0x31
 BW_RATE             = 0x2C
 POWER_CTL           = 0x2D
+THRESH_ACT          = 0x24
+ACT_INACT_CTL       = 0x27
+INT_MAP             = 0x2F
+INT_ENABLE          = 0x2E
+INT_SOURCE          = 0x30
+
 
 BW_RATE_1600HZ      = 0x0F
 BW_RATE_800HZ       = 0x0E
@@ -37,16 +47,42 @@ RANGE_16G           = 0x03
 
 MEASURE             = 0x08
 AXES_DATA           = 0x32
+INT_THRESHOLD       = 0x05
+ACT_ENABLE          = 0x10
+ACT_AXES            = 0xF0
 
 class ADXL345:
 
     address = None
 
-    def __init__(self, address = 0x53):        
+    def __init__(self, address = 0x53, interrupt = False):        
         self.address = address
         self.setBandwidthRate(BW_RATE_100HZ)
         self.setRange(RANGE_2G)
         self.enableMeasurement()
+        if interrupt:
+          self.enableInterrupt()
+
+    def handleInterrupt(self, channel):
+        print "Detected activity"
+        self.clearInterrupt()
+
+    def enableInterrupt(self):
+        GPIO.setmode(GPIO.BOARD)
+        GPIO.setup(GPIO_INTERRUPT_PIN, GPIO.IN)
+        GPIO.add_event_detect(GPIO_INTERRUPT_PIN, GPIO.RISING, callback = self.handleInterrupt)
+        
+        bus.write_byte_data(self.address, THRESH_ACT, INT_THRESHOLD)
+        bus.write_byte_data(self.address, ACT_INACT_CTL, ACT_AXES)
+        bus.write_byte_data(self.address, INT_MAP, 0x00)
+        bus.write_byte_data(self.address, INT_ENABLE, ACT_ENABLE)
+        self.clearInterrupt()
+
+    def clearInterrupt(self):
+        bus.read_byte_data(self.address, INT_SOURCE)
+        
+    def cleanup(self):
+        GPIO.cleanup()
 
     def enableMeasurement(self):
         bus.write_byte_data(self.address, POWER_CTL, MEASURE)
